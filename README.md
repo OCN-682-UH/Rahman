@@ -1,32 +1,46 @@
-### OCN862 Week 02 Repository #############
+# Data Fundamentals in R — Weekly Overview
 
-This repository contains coursework and assignments for Week 2 of my Data Fundamentals in R class.  
-The focus of this week’s assignment was to practice data organization, scripting, and version control.
-
-
-### Repository Structure ###########
-
-Week_2/
-├── scripts/
-│ └── week2_analysis.R # R script for Week 2 exercise
-├── data/
-│ └── weightdata.csv # Sample data used in analysis
-└── README.md # Overview of repository (reading NOW!))
-
-### Content #########
-
-Week_2/scripts/: R code demonstrating basic data manipulation and visualization.
-Week_2/data/: Example dataset (weightdata) used in this week’s exercise.
-Week_2/README.md: This file (You are reading NOW!), explaining repo organization and purpose.
+This repository contains scripts, data, and assignments for the **Data Fundamentals in R** course.  
+Below is a simple weekly breakdown of what we will learn throughout the semester.
 
 
-### Learning Objectives #############
+## 📅 Weekly Topics
 
-Practice tidy data principles from Broman & Woo (2018).
-Organize data in a reproducible way (clean headers, no blank cells, consistent units- Get from you).
-Write a simple R script to load, clean, and summarize data.
-Learn to use Git & GitHub to track and share code.
+| Week | Date       | In-Class Focus                                                             
+|------|-----------|------------------------------------------------------
+| 1    | 26-Aug    | Intro to class, What is data, R & RStudio refresher, data structures 
+| 2    | 2-Sep     | Reproducible research, GitHub basics                
+| 3    | 9-Sep     | Intro to data visualization, ggplot basics            
+| 4    | 16-Sep    | Data wrangling with `dplyr`                          
+| 5    | 23-Sep    | Relational data, joins                               
+| 6    | 30-Sep    | Intro to Quarto, good vs. bad plots                   
+| 7    | 7-Oct     | Spatial data & mapping                               
+| 8    | 14-Oct    | Strings & regex, advanced plotting                   
+| 9    | 28-Oct    | Functional programming, writing functions            
+| 10   | 4-Nov     | Intro to Shiny apps                                  
+| 11   | 11-Nov    | No class (Veterans Day)                          
+| 12   | 18-Nov    | Iteration: loops, map functions                      
+| 13   | 25-Nov    | Modeling with `broom`, Thanksgiving week (online)    
+| 14   | 2-Dec     | Final presentations (Group 1)                        
+| 15   | 9-Dec     | Final presentations (Group 2)                        
 
 
-### Prerequisites ############
-install.packages("tidyverse")# Rahman
+
+### 🛠 Tools & Skills Covered
+- R and RStudio basics
+- Data wrangling (`dplyr`, `tidyr`)
+- Visualization (`ggplot2`, advanced plotting, maps)
+- Reproducibility (GitHub, Quarto, reproducible scripts)
+- Functional programming
+- Modeling with `broom`
+- Shiny app development
+
+
+### 📦 How to Use This Repo
+1. Clone this repository to your computer.
+2. Open the `.Rproj` file in RStudio.
+3. Each week’s materials are in `Week_X/` folders.
+4. Follow along with lecture and complete assignments.
+
+- Wickham, H., & Grolemund, G. (2017). *R for Data Science (R4DS).*  
+- Wilke, C.O. (2019). *Fundamentals of Data Visualization.*  

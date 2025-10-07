@@ -1,0 +1,120 @@
+---
+title: "Week 06 — Quarto"
+author: "Sk Abidur Rahman"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: true
+    theme: flatly
+execute:
+  warning: false
+  message: false
+  css: styles.css    #use custom CSS
+editor: visual
+---
+
+# Introduction
+
+I am using **publicly available** `palmerpenguins` dataset for creating table and figure in *Quarto* for Week_06
+
+
+## Load Library
+```{r}
+library(tidyverse)
+library(palmerpenguins)
+library(gt) #Create good quality table
+library(here)
+```
+
+## Data Wrangling 
+
+```{r}
+penguins_clean <- penguins %>% #penguins dataset
+  select(species, sex, body_mass_g) %>%
+  drop_na(species, sex, body_mass_g)
+
+dplyr::glimpse(penguins_clean) #summary
+```
+
+## Task 01- Table
+
+```{r}
+#| label: table-summary
+#| tbl-cap: "Summary of penguin body mass (g) by species and sex."
+                  
+tbl <- penguins_clean %>%
+  group_by(species, sex) %>% #summary (n, mean, sd) and display with gt()
+  summarise(
+    n    = n(),
+    mean = mean(body_mass_g),
+    sd   = sd(body_mass_g),
+    .groups = "drop"
+  ) %>%
+  arrange(species, sex)
+
+gt_tbl <- tbl %>%
+  gt(rowname_col = NULL) %>%
+  fmt_number(columns = c(mean, sd), decimals = 1) %>%
+  tab_header(
+    title = md("**Penguin Body Mass (g)**"), #Bold
+    subtitle = "Grouped by species and sex"
+  ) %>%
+  cols_label(
+    species = "Species",
+    sex     = "Sex",
+    n       = "N",
+    mean    = "Mean (g)",
+    sd      = "SD (g)"
+  ) %>%
+  tab_options(table.font.size = px(14))
+gt_tbl
+```
+
+```{r}
+#| label: save-table        #save table
+#| echo: false
+readr::write_csv(tbl, here("Week_06", "output", "penguins_bodymass_summary.csv"))
+
+```
+
+## Task 02- Figure
+
+```{r}
+#| label: fig-density
+#| fig-cap: "Distribution of penguin body mass (g) by species."
+#| fig-width: 9
+#| fig-height: 5
+              
+p <- ggplot(penguins_clean, aes(x = body_mass_g, fill = species)) +
+  geom_density(alpha = 0.45, color = NA, adjust = 1) +        # density plot 
+  scale_fill_brewer(palette = "Set2", name = "Species") +
+  scale_x_continuous(labels = scales::label_comma()) +
+  labs(
+    title = "Penguin Body Mass Distributions",
+    subtitle = "Kernel density estimate by species",
+    x = "Body mass (g)",
+    y = "Density",
+    caption = "Data: palmerpenguins"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "top",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold")
+  )
+
+p
+```
+
+
+```{r}
+#| label: save-figure    #save figure
+#| echo: false
+ggsave(
+  filename = here("Week_06", "output", "penguins_bodymass_density.png"),
+  plot = p, width = 9, height = 5, dpi = 320
+)
+```
+

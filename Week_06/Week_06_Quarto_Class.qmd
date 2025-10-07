@@ -1,0 +1,35 @@
+---
+title: "My First Quarto"
+author: "Sk Abidur Rahman"
+format:
+html:
+  toc: true
+  theme: darkly
+---
+
+## Introduction
+This is my first *Qaurto* document and I am going to plot some penguin data.
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(here)
+library(palmerpenguins)
+```
+
+## Look at the data
+
+```{r}
+summary(penguins)
+```
+
+## Make a plot
+This is looking at the relationship **bill length** versus **bill depth**.
+
+```{r}
+penguins   #penguins dataset
+  ggplot2::aes(x= bill_len, y=bill_dep, color=species)+
+  geom_point()
+```
+

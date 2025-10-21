@@ -1,0 +1,153 @@
+---
+title: "Mapping Plastic Pollution — TidyTuesday 2021-01-26"
+author: "Sk Abidur Rahman"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+format:
+  html:
+    toc: true
+    code-fold: true
+    theme: flatly
+execute:
+  warning: false
+  message: false
+---
+
+# Introduction
+
+This report maps **plastic pollution counts** reported by country from the TidyTuesday week **2021-01-26**.  
+We’ll follow best practices for Quarto structure, file paths, and mapping:
+
+- **Reproducible paths** via `here`
+- **Clean names** and country matching with `countrycode`
+- A **choropleth** with a good projection (*Robinson*), **legend**, **scalebar**, **north arrow**, and **caption**
+- Saved outputs in `Week_07_maps/output/`
+
+*Formatting demo:* **bold**, *italics*, and a list ✔️
+
+## Setup
+
+```{r}
+#| label: setup
+#| include: false
+# Install once if needed:
+# install.packages(c("tidyverse","sf","rnaturalearth","rnaturalearthdata","ggspatial","countrycode","janitor","gt","here"))
+
+library(tidyverse)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(ggspatial)
+library(countrycode)
+library(janitor)
+library(gt)
+library(here)
+# Folders
+dir.create(here("Week_07_maps","data"),   recursive = TRUE, showWarnings = FALSE)
+dir.create(here("Week_07_maps","output"), recursive = TRUE, showWarnings = FALSE)
+
+# Folders
+dir.create(here("Week_07_maps","output"), recursive = TRUE, showWarnings = FALSE)
+```
+
+
+```{r}
+#| label: load-data
+# If the plastics.csv file isn't present, download it:
+f_plastics <- here("Week_07_maps","data","plastics.csv")
+if (!file.exists(f_plastics)) {
+  url <- "https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-01-26/plastics.csv"
+  download.file(url, destfile = f_plastics, mode = "wb")
+}
+
+plastics_raw <- readr::read_csv(f_plastics, show_col_types = FALSE)
+dplyr::glimpse(plastics_raw)
+
+```
+
+
+
+```{r}
+#| label: tidy-aggregate
+plastics_tidy <- plastics_raw %>%
+  mutate(
+    iso3c = countrycode(country, "country.name", "iso3c", warn = FALSE)
+  ) %>%
+  filter(!is.na(iso3c)) %>%
+  mutate(
+    row_total = if ("grand_total" %in% names(.)) {
+      as.numeric(grand_total)
+    } else {
+      # sum all numeric columns except 'year' if it exists
+      rowSums(select(., where(is.numeric), -any_of("year")), na.rm = TRUE)
+    }
+  ) %>%
+  group_by(iso3c) %>%
+  summarise(total_plastic = sum(row_total, na.rm = TRUE), .groups = "drop")
+
+```
+
+
+```{r}
+#| label: world-join
+world <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf") %>%
+  st_make_valid() %>%
+  mutate(iso3c = iso_a3)
+
+world_plastics <- world %>% left_join(plastics_tidy, by = "iso3c")
+
+# Robinson projection (good global compromise)
+world_robin <- st_transform(world_plastics, crs = "+proj=robin")
+```
+
+
+```{r}
+world_ll <- st_transform(world_plastics, 4326)  # lon/lat
+
+p_ll <- ggplot(world_ll) +
+  geom_sf(aes(fill = total_plastic), color = "grey40", linewidth = 0.1) +
+  scale_fill_viridis_c(option = "C", trans = "sqrt",
+                       labels = scales::label_number(big.mark = ","), na.value = "gainsboro",
+                       name = "Plastic count\n(sqrt scale)") +
+  annotation_scale(location = "bl", width_hint = 0.25, text_cex = 0.8) +
+  annotation_north_arrow(location = "bl", which_north = "true",
+                         pad_x = grid::unit(0.6, "in"), pad_y = grid::unit(0.6, "in"),
+                         style = north_arrow_fancy_orienteering) +
+  labs(title = "Plastic Pollution by Country (WGS84)",
+       subtitle = "Scalebar only shown on lon/lat map",
+       caption = "Source: Break Free From Plastic via TidyTuesday") +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.major = element_line(linewidth = 0.2, color = "grey90"),
+        plot.title = element_text(face = "bold"))
+
+p_ll
+ggsave(here("Week_07_maps","output","plastics_map_wgs84.png"), p_ll, width = 10, height = 6, dpi = 320)
+```
+
+
+```{r}
+#| label: top-table
+#| tbl-cap: "Top 15 countries by aggregated plastic counts."
+top_tbl <- plastics_tidy %>%
+  arrange(desc(total_plastic)) %>%
+  slice_head(n = 15) %>%
+  mutate(rank = row_number()) %>%
+  select(rank, iso3c, total_plastic)
+
+gt(top_tbl) %>%
+  fmt_number(columns = total_plastic, decimals = 0) %>%
+  tab_options(table.font.size = gt::px(14))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

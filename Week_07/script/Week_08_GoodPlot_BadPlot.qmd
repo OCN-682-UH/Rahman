@@ -1,0 +1,133 @@
+---
+title: "Good Plot / Bad Plot"
+author: "Sk Abidur Rahman"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+format:
+  html:
+    toc: true
+    code-fold: false   # code must be visible per rules
+    theme: flatly
+execute:
+  warning: false
+  message: false
+---
+
+# Overview
+
+This Quarto document contains **two plots** made with **ggplot2** from the same dataset
+(`palmerpenguins`):
+
+- a deliberately **bad** plot that violates many best-practice principles
+- a **good** plot that communicates the same information clearly
+
+I briefly explain *why* the bad plot is bad and why the good plot is good.
+
+## Data
+
+```{r}
+#| label: setup
+# packages
+library(tidyverse)
+library(palmerpenguins)
+library(here)
+
+# ensure output dir
+dir.create(here("Week_08", "output"), recursive = TRUE, showWarnings = FALSE)
+
+# minimal cleaned data
+dat <- penguins %>%
+  select(species, island, sex, body_mass_g, flipper_length_mm, bill_length_mm) %>%
+  drop_na(species, sex, body_mass_g, flipper_length_mm, bill_length_mm)
+
+glimpse(dat)
+```
+
+
+```{r}
+#| label: good-plot
+#| fig-cap: "Good plot: distribution of body mass by species and sex (violin + box + jitter)."
+p_good <- dat %>%
+  mutate(sex = str_to_title(sex)) %>%
+  ggplot(aes(x = species, y = body_mass_g)) +
+  geom_violin(aes(fill = species), color = NA, alpha = 0.5, width = 0.9, trim = FALSE) +
+  geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0.9, linewidth = 0.4) +
+  geom_jitter(aes(color = sex), width = 0.1, alpha = 0.3, size = 1.2, show.legend = TRUE) +
+  scale_y_continuous(labels = scales::label_comma()) +
+  scale_fill_brewer(palette = "Set2", guide = "none") +
+  scale_color_brewer(palette = "Dark2", name = "Sex") +
+  labs(
+    title = "Penguin Body Mass by Species and Sex",
+    subtitle = "Violin shows distribution; boxplot highlights median & IQR; points show individuals",
+    x = "Species", y = "Body mass (g)",
+    caption = "Data: palmerpenguins"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "top",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold")
+  )
+
+p_good
+ggsave(here("Week_08","output","good_plot.png"), p_good, width = 9, height = 5, dpi = 320)
+```
+
+<!-- Why this plot is good -->
+<!-- Honest axis (starts at zero by default or an appropriate baseline). -->
+<!-- Shows distribution + summary (violin + box) and individual variability (jitter). -->
+<!-- Clear encodings: color = sex, fill = species; legends are simple and meaningful. -->
+<!-- Readable labels, uncluttered grid, and colorblind-friendly palettes. -->
+<!-- Concise title/subtitle convey what to look for; caption cites data. -->
+
+```{r}
+#| label: bad-plot
+#| fig-cap: "Bad plot: misleading axis, pointless decoration, hard-to-read text, and chartjunk."
+set.seed(123)
+
+# Summaries (I'll misuse them)
+sum_bad <- dat %>%
+  group_by(species) %>%
+  summarise(mean_mass = mean(body_mass_g), .groups = "drop")
+
+# BAD choices:
+# - Start y-axis at 3000 (not zero) to exaggerate small differences
+# - Random neon colors, busy grid, rotated labels
+# - Add jittered points over bars (but they are unrelated to bar heights)
+# - Overwrite aesthetics in conflicting ways
+# - Use ugly fonts and excessive text size
+p_bad <- ggplot(sum_bad, aes(x = species, y = mean_mass, fill = species)) +
+  geom_col(width = 0.4, color = "black") +
+  geom_point(data = dat,
+             aes(x = species, y = body_mass_g, color = island),
+             position = position_jitter(width = 0.15, height = 0), alpha = 0.7, size = 2, inherit.aes = FALSE) +
+  scale_y_continuous(limits = c(3000, max(sum_bad$mean_mass) + 400), breaks = seq(3000, 5000, 100)) +
+  scale_fill_manual(values = c("Adelie"="#ff00ff","Chinstrap"="#00ffff","Gentoo"="#ffff00")) +
+  scale_color_manual(values = c("Biscoe"="#ff6600","Dream"="#0066ff","Torgersen"="#00cc66")) +
+  labs(
+    title = "Average Body Mass (g) — *SO* Important!!!",
+    subtitle = "Totally accurate* (*not really)",
+    x = "Species (rotated because why not)",
+    y = "Body Mass (g) — zoomed to mislead"
+  ) +
+  theme_bw(base_size = 18, base_family = "Courier") +
+  theme(
+    panel.grid.major = element_line(linewidth = 1),
+    panel.grid.minor = element_line(linewidth = 0.8),
+    legend.position = "bottom",
+    axis.text.x = element_text(angle = 70, hjust = 1, vjust = 1),
+    plot.title = element_text(face = "bold.italic"),
+    plot.subtitle = element_text(colour = "red")
+  )
+
+p_bad
+ggsave(here("Week_08","output","bad_plot.png"), p_bad, width = 10, height = 7, dpi = 200)
+
+```
+
+<!-- Why this plot is bad (on purpose) -->
+<!-- Truncated y-axis (starts at 3000 g) exaggerates small differences → misleading magnitude. -->
+<!-- Cluttered: bars + jittered points on the same axis with different meanings = confusion. -->
+<!-- Chartjunk colors (neon) and busy grids distract from the data. -->
+<!-- Overlapping encodings (fill = species, color = island) with bars + points muddle the legend. -->
+<!-- Rotated labels and large fonts reduce readability for no gain. -->
+<!-- Title/subtitle add noise rather than information. -->

@@ -1,0 +1,217 @@
+---
+title: "Week 09 — Intertidal Analysis"
+author: "Sk Abidur Rahman"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+format:
+  html:
+    toc: true
+    theme: flatly
+execute:
+  warning: false
+  message: false
+---
+## Notes
+
+Uses janitor::clean_names() to normalize headers
+Orders tide as low → mid → high
+Orders site by latitude (south → north) from the latitude file
+Saves figure to Week_09/output/
+
+```{r}
+#| label: setup
+library(tidyverse)
+library(janitor)
+library(here)
+
+dir.create(here("Week_09","output"), recursive = TRUE, showWarnings = FALSE)
+```
+
+## Helper: robust latitude reader
+
+```{r}
+#| label: helper-read-lat
+
+# Reads Week_09/data/intertidaldata_latitude.csv even if:
+
+# - tab vs comma vs whitespace delimited
+
+# - stray commas after numbers (e.g., "41.99,")
+
+# - odd headers
+
+read_lat_tbl <- function(path) {
+
+# Try TSV, then CSV
+
+lat <- tryCatch(
+readr::read_tsv(path, show_col_types = FALSE, na = c("", "NA")),
+error = function(e) readr::read_csv(path, show_col_types = FALSE, na = c("", "NA"))
+)
+
+# If still one column (not split), fall back to manual line parse
+
+if (ncol(lat) < 2) {
+lines <- readr::read_lines(path)
+lines <- lines[nzchar(lines)]
+if (length(lines) < 2) stop("Latitude file appears empty.")
+tib <- tibble(raw = lines[-1]) |>
+tidyr::separate(
+raw, into = c("site","latitude"), sep = "\s*[\t, ]+\s*",
+extra = "merge", fill = "right"
+)
+lat <- tib
+}
+
+lat |>
+janitor::clean_names() |>
+dplyr::select(1:2) |>
+rlang::set_names(c("site","latitude")) |>
+dplyr::mutate(
+site     = as.character(site),
+latitude = readr::parse_number(as.character(latitude))
+) |>
+dplyr::filter(!is.na(site), !is.na(latitude))
+}
+```
+
+## Read latitude table
+
+```{r}
+#| label: read-lat
+read_lat_tbl <- function(path) {
+
+# Try as TSV (course repo uses tabs)
+
+lat <- tryCatch(
+readr::read_tsv(path, show_col_types = FALSE, na = c("", "NA")),
+error = function(e) NULL
+)
+
+# If that fails or we only got one column, fall back to simple manual split on TAB or comma
+
+if (is.null(lat) || ncol(lat) < 2) {
+lines <- readr::read_lines(path)
+lines <- lines[nzchar(lines)]
+stopifnot(length(lines) >= 2)
+header <- strsplit(lines[1], "[\t,]")[[1]]
+rows <- lapply(lines[-1], function(x) {
+parts <- strsplit(x, "[\t,]")[[1]]
+length(parts) <- 2
+parts
+})
+mat <- do.call(rbind, rows)
+lat <- tibble::as_tibble(mat, .name_repair = "minimal")
+if (length(header) >= 2) {
+names(lat) <- header[1:2]
+} else {
+names(lat) <- c("Site","Latitude")
+}
+}
+
+lat |>
+janitor::clean_names() |>
+dplyr::transmute(
+site     = as.character(site),
+latitude = readr::parse_number(as.character(latitude))
+) |>
+dplyr::filter(!is.na(site), !is.na(latitude))
+}
+```
+
+
+
+## Read & clean data
+
+```{r}
+#| label: read-intertidal
+
+# Intertidal data: tab-delimited in the course repo
+
+inter <- readr::read_tsv(
+here("Week_09","data","intertidaldata.csv"),
+show_col_types = FALSE, na = c("", "NA")
+) |>
+janitor::clean_names()
+
+# ----- 2) FIX FACTORS ---------------------------------------------------------
+# Find the column that contains 'Quad' (case-insensitive)
+quad_col <- names(inter)[stringr::str_detect(names(inter), "quad", ignore_case = TRUE)][1]
+
+inter2 <- inter |>
+  mutate(
+    tide_height = tolower(trimws(.data[[quad_col]])),
+    tide_height = stringr::str_replace_all(tide_height, "[^a-z]", ""),
+    tide_height = factor(tide_height, levels = c("low", "mid", "high"))
+  )
+
+# Latitude file → site order south→north
+
+lat_tbl   <- read_lat_tbl(here("Week_09","data","intertidaldata_latitude.csv"))
+site_order <- lat_tbl |>
+arrange(latitude) |>
+pull(site)
+
+# Apply site ordering (after clean_names, it's 'site')
+
+inter3 <- inter2 |>
+mutate(site = factor(site, levels = site_order))
+```
+
+```{r}
+# Quick check of column names
+names(inter)
+
+```
+
+
+## Plot (factor axis)
+
+This plot uses a simple richness proxy: the number of taxa with value > 0 in each quadrat.
+If you have a true richness column, swap it in below.
+
+```{r}
+#| label: plot
+
+# Likely organism columns after clean_names():
+
+candidate_org <- c(
+"bare_rock","algae","mussels","small_barnacles","large_barnacles",
+"gooseneck_barnacles","anemone","whelks_counts","crabs_counts","stars_counts"
+)
+present_cols <- intersect(names(inter3), candidate_org)
+
+# Compute richness per row
+
+inter_rich <- inter3 |>
+rowwise() |>
+mutate(richness = sum(c_across(all_of(present_cols)) > 0, na.rm = TRUE)) |>
+ungroup()
+
+# Mean richness by tide (factor axis)
+
+plot_dat <- inter_rich |>
+group_by(quadrat) |>
+summarise(mean_richness = mean(richness, na.rm = TRUE), .groups = "drop")
+
+p <- ggplot(plot_dat, aes(x = quadrat, y = mean_richness, fill = quadrat)) +
+geom_col(width = 0.7) +
+scale_fill_brewer(palette = "Set2", guide = "none") +
+labs(
+title = "Intertidal Species Richness by Tide Height",
+subtitle = "Tide factor ordered low → mid → high",
+x = "Tide height (factor)", y = "Mean richness"
+) +
+theme_minimal(base_size = 12) +
+theme(panel.grid.minor = element_blank())
+
+p
+ggsave(here("Week_09","output","intertidal_richness_by_tide.png"),
+p, width = 8, height = 5, dpi = 320)
+```
+
+## check factor levels
+```{r}
+levels(inter3$quadrat)
+head(levels(inter3$site), 10)
+```
+

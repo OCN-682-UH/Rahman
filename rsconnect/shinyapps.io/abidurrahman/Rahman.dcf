@@ -1,0 +1,12 @@
+name: Rahman
+title: Rahman
+username: abidurrahman
+account: abidurrahman
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 16051200
+bundleId: 11171268
+url: https://abidurrahman.shinyapps.io/Rahman/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

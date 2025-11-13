@@ -1,0 +1,93 @@
+---
+title: "Tidy Tuesday — Week 1 (WHO TB)"
+author: "Sk Abidur Rahman"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+format:
+  html:
+    toc: true
+    theme: flatly
+execute:
+  warning: false
+  message: false
+---
+
+## What’s new this week?
+- used **`janitor::clean_names()`** to standardize headers.
+- used **robust tidying**: sum across *all numeric columns* to compute total TB counts by country–year (works even if the file schema changes).
+- used **`forcats::fct_reorder`** to order bars by value.
+- saved the figure to `output/` with `ggsave()` and made a small **gt table**.
+
+```{r}
+#| label: setup
+library(tidyverse)
+library(janitor)
+library(here)
+library(gt)
+
+# Ensure output folder
+dir.create(here("Tidy_Tuesday","Week_1","output"), recursive = TRUE, showWarnings = FALSE)
+
+# Path to data 
+f_tb <- here("Tidy_Tuesday","Week_1","data","who_tb_data.csv")
+stopifnot(file.exists(f_tb))
+```
+
+
+###Load & tidy
+
+```{r}
+tb_raw <- readr::read_csv(f_tb, show_col_types = FALSE) |> clean_names()
+
+tb_tidy <- tb_raw |>
+rename(
+country = any_of(c("country","country_name")),
+year    = any_of(c("year","yr"))
+) |>
+mutate(across(where(is.character), ~trimws(.))) |>
+filter(!is.na(country)) |>
+group_by(country, year) |>
+summarise(total_cases = sum(across(where(is.numeric)), na.rm = TRUE), .groups = "drop")
+
+focus_year <- max(tb_tidy$year, na.rm = TRUE)
+top_n <- 15
+
+top_cty <- tb_tidy |>
+filter(year == focus_year) |>
+arrange(desc(total_cases)) |>
+slice_head(n = top_n) |>
+mutate(country = forcats::fct_reorder(country, total_cases))
+```
+
+###Head of Data: year & show the top countries
+
+```{r}
+focus_year <- max(tb_tidy$year, na.rm = TRUE) # last year in data
+top_n <- 15
+
+top_cty <- tb_tidy |>
+filter(year == focus_year) |>
+arrange(desc(total_cases)) |>
+slice_head(n = top_n) |>
+mutate(country = forcats::fct_reorder(country, total_cases))
+
+top_cty |> head()
+```
+
+###Plot
+
+```{r}
+p <- ggplot(top_cty, aes(x = country, y = total_cases)) +
+geom_col(fill = "#5ab4ac") +
+coord_flip() +
+scale_y_continuous(labels = scales::label_comma()) +
+labs(
+title = paste("WHO TB — Top", top_n, "Countries in", focus_year),
+x = NULL, y = "Total TB cases (sum of numeric columns)"
+) +
+theme_minimal(base_size = 12) +
+theme(panel.grid.minor = element_blank())
+
+p
+ggsave(here("Tidy_Tuesday","Week_1","output","tb_top_countries.png"), p, width = 9, height = 6, dpi = 320)
+
+```

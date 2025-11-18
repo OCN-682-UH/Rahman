@@ -1,0 +1,190 @@
+---
+title: "Tidy Tuesday-Week 2: Sherlock Holmes"
+author: "Sk Abidur Rahman"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+format:
+  html:
+    toc: true
+    theme: flatly
+execute:
+  warning: false
+  message: false
+---
+
+## Overview
+
+This **Tidy Tuesday** explores *The Complete Sherlock Holmes* lines.  
+**New thing I learned:** using **tidytext** to tokenize **sentences** and doing a quick **speaker tagging** heuristic to compare sentence lengths & sentiment.
+
+Did:
+1) Split into **sentences**  
+2) Heuristically tag **speaker** (`Holmes`, `Watson`, `Other`)  
+3) Compare **sentence length** and **sentiment**  
+
+
+```{r}
+#| label: setup
+#install.packages(c("tidyverse","tidytext","here","gt")) 
+library(tidyverse)
+library(tidytext)
+library(here)
+library(gt)
+```
+
+
+###Load data
+#read the CSV directly from the TidyTuesday repo (so it renders anywhere)
+
+```{r}
+#| label: load
+url <- "https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-11-18/holmes.csv"
+
+holmes <- readr::read_csv(url, show_col_types = FALSE) |>
+  mutate(text = coalesce(text, ""))  # keep blanks as empty strings
+
+glimpse(holmes)
+```
+
+# Convert to sentences while preserving book & line order
+
+```{r}
+#| label: sentences
+
+sentences <- holmes |>
+mutate(line_num = row_number(), .by = book) |>
+unnest_tokens(sentence, text, token = "sentences", to_lower = FALSE, drop = TRUE) |>
+filter(nchar(sentence) > 0) |>
+mutate(sent_id = row_number(), .by = book)
+```
+
+<!-- If the sentence contains “said Holmes” / “Holmes said” ⇒ Holmes -->
+<!-- If it contains “said I” / “I said” or “said Watson” ⇒ Watson -->
+<!-- Otherwise ⇒ Other -->
+
+
+```{r}
+#| label: speaker
+holmes_patterns <- regex("\b(Holmes said|said Holmes)\b", ignore_case = TRUE)
+watson_patterns <- regex("\b(I said|said I|Watson said|said Watson)\b", ignore_case = TRUE)
+
+sentences <- sentences |>
+mutate(
+speaker = case_when(
+str_detect(sentence, holmes_patterns)  ~ "Holmes",
+str_detect(sentence, watson_patterns)  ~ "Watson",
+TRUE                                   ~ "Other"
+),
+speaker = factor(speaker, levels = c("Holmes","Watson","Other"))
+)
+```
+
+##Sentence length 
+
+
+```{r}
+#| label: length
+
+# token-by-word per sentence, then tally
+
+sent_word_counts <- sentences |>
+unnest_tokens(word, sentence, token = "words", to_lower = FALSE) |>
+count(book, sent_id, speaker, name = "n_words")
+
+# summary by speaker
+
+len_by_speaker <- sent_word_counts |>
+group_by(speaker) |>
+summarise(
+mean_len = mean(n_words, na.rm = TRUE),
+med_len  = median(n_words, na.rm = TRUE),
+n_sent   = dplyr::n(),
+.groups = "drop"
+)
+
+len_by_speaker
+```
+
+###Plot:sentence length distribution
+
+```{r}
+#| label: fig-length
+#| fig-cap: "Sentence length by speaker (word count)."
+p_len <- sent_word_counts |>
+filter(!is.na(speaker)) |>
+ggplot(aes(x = speaker, y = n_words, fill = speaker)) +
+geom_violin(alpha = 0.5, color = NA, width = 0.9, trim = TRUE) +
+geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0.9) +
+scale_fill_brewer(palette = "Set2", guide = "none") +
+labs(
+title = "Sherlock Holmes: Sentence Length by Speaker",
+subtitle = "Heuristic speaker tagging; word count per sentence",
+x = "Speaker", y = "Words per sentence"
+) +
+theme_minimal(base_size = 12) +
+theme(panel.grid.minor = element_blank())
+
+p_len
+
+ggsave(
+filename = here("Tidy_Tuesday","Week_2","output","sentence_length_by_speaker.png"),
+plot = p_len, width = 9, height = 5, dpi = 320
+)
+```
+
+
+###Sentiment (bing) over narrative position (per book)
+
+```{r}
+#| label: sentiment
+bing <- get_sentiments("bing") # positive / negative lexicon
+
+sentiment_by_sent <- holmes |>
+mutate(line_num = row_number(), .by = book) |>
+unnest_tokens(word, text, token = "words") |>
+inner_join(bing, by = "word") |>
+mutate(score = if_else(sentiment == "positive", 1L, -1L)) |>
+group_by(book, line_block = (row_number() %/% 200)) |>
+summarise(net_sent = sum(score), .groups = "drop")  # coarse rolling-ish blocks
+
+# Show top 8 books by variability in sentiment
+
+top_books <- sentiment_by_sent |>
+group_by(book) |>
+summarise(sd_sent = sd(net_sent), .groups = "drop") |>
+slice_max(sd_sent, n = 8) |>
+pull(book)
+
+p_sent <- sentiment_by_sent |>
+filter(book %in% top_books) |>
+ggplot(aes(x = line_block, y = net_sent, group = book)) +
+geom_line() +
+facet_wrap(vars(book), scales = "free_y") +
+labs(
+title = "Net sentiment across the narrative (blocks of ~200 words)",
+x = "Narrative block index", y = "Net sentiment (bing)"
+) +
+theme_minimal(base_size = 12)
+
+p_sent
+
+ggsave(
+filename = here("Tidy_Tuesday","Week_2","output","sentiment_over_time.png"),
+plot = p_sent, width = 10, height = 6, dpi = 320
+)
+```
+
+#Table: mean sentence length by speaker
+```{r}
+#| label: table
+len_by_speaker |>
+arrange(desc(mean_len)) |>
+mutate(
+mean_len = round(mean_len, 1),
+med_len  = round(med_len, 1)
+) |>
+gt() |>
+tab_header(
+title = "Sherlock Holmes — Sentence Length by Speaker",
+subtitle = "Heuristic speaker tags"
+)
+

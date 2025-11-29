@@ -10,124 +10,132 @@ execute:
   warning: false
   message: false
 ---
-
 ## Overview
-Define two general-purpose functions and demonstrate them on **built-in datasets** (`mtcars`, `iris`):
+Define two general purpose functions and demonstrate them on **built-in datasets** (`mtcars`, `iris`):
 
-- `group_summary()`: **non-plot**: summary stats by one or two groups (n, mean, sd)  
-- `smart_scatter()`: **plot**: clean scatter with trend (`lm`, `loess`, or `none`), color/facet
+- group_summary: **non-plot**: summary stats by one or two groups (n, mean, sd)  
+- smart_scatter: **plot**: clean scatter, color/facet
 
 
 
 ```{r}
-#| label: setup
 # install.packages(c("tidyverse","here")) 
 library(tidyverse)
 library(here)
 
 # folders
-dir.create(here("Week_10","output"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("Week_10","output"))
 ```
 
 ##Function-1: Non-plot: group_summary()
 ```{r}
-#| label: fn-group-summary #per-group summaries (n, mean, sd) for any numeric column, grouped by 1 or 2 factors.
+#calculate n, mean, and sd for a numeric column
 group_summary <- function(data, value, group1, group2 = NULL) {
-value  <- enquo(value)
-group1 <- enquo(group1)
-group2 <- enquo(group2)
+  group_cols <- c(group1, group2) |> na.omit() # Combine the grouping columns into a vector, ignoring NULL
 
-if (rlang::quo_is_null(group2)) {
-data %>%
-group_by(!!group1) %>%
-summarise(
-n    = dplyr::n(),
-mean = mean(!!value, na.rm = TRUE),
-sd   = sd(!!value, na.rm = TRUE),
-.groups = "drop"
-)
-} else {
-data %>%
-group_by(!!group1, !!group2) %>%
-summarise(
-n    = dplyr::n(),
-mean = mean(!!value, na.rm = TRUE),
-sd   = sd(!!value, na.rm = TRUE),
-.groups = "drop"
-)
-}
+  data |> # pipeline
+    dplyr::group_by(dplyr::across(dplyr::all_of(group_cols))) |> # Group the data using the column
+    
+    #Summary statistics 
+    dplyr::summarise(
+      n    = dplyr::n(),                 # Count the number of rows in the group
+      mean = mean(get(value), na.rm = TRUE), # Use get(value) to find the column specified by the string name
+      sd   = sd(get(value), na.rm = TRUE),   
+      .groups = "drop"                    # Ungroup the data 
+    )
 }
 ```
 
-## Non-plot
+## Grouped by one factor: iris 
 
 ```{r}
-iris_sum <- group_summary(iris, value = Sepal.Length, group1 = Species) ##Sepal.Length by Species
-iris_sum
+# Summarize the Sepal.Length by the Species type: both are string
+iris_sum_one_group <- group_summary(
+  iris, 
+  value = "Sepal.Length", # as a string
+  group1 = "Species"      # as a string
+) 
+
+# Display result
+iris_sum_one_group
+```
+
+## Grouped by two factor: mtcars
+
+```{r}
+#Summarize mpg (miles per gallon) by cyl and am (transmission type)
+mtcars_sum_two_groups <- group_summary(
+  mtcars, 
+  value = "mpg", 
+  group1 = "cyl", 
+  group2 = "am"
+)
+
+# Display result
+mtcars_sum_two_groups 
+
+# Save result 
+readr::write_csv(
+  mtcars_sum_two_groups, 
+  here("Week_10","output","mtcars_mpg_by_cyl_am.csv")
+)
 ```
 
 
+#Function2: Plot- smart_scatter ()
 ```{r}
-mtcars_sum <- group_summary(mtcars, value = mpg, group1 = cyl, group2 = am)
-mtcars_sum #MPG by cyl and am
-write_csv(mtcars_sum, here("Week_10","output","mtcars_mpg_by_cyl_am.csv"))
-
-```
-
-#Function2: Plot
-
-```{r}
-#| label: fn-smart-scatter #polished scatter with trendline, color, and facet
+# clean, customize scatter plot by smart_scatter
 smart_scatter <- function(data, x, y,
-                          color = NULL,
-                          facet = NULL,
-                          trend = c("lm","loess","none"),
+                          color,
+                          trend = "lm",
                           point_alpha = 0.7,
-                          point_size = 2) {
-  x <- rlang::enquo(x)
-  y <- rlang::enquo(y)
-  color <- rlang::enquo(color)
-  facet <- rlang::enquo(facet)
-  trend <- match.arg(trend)
+                          point_size = 2){
 
-  p <- ggplot(data, aes(x = !!x, y = !!y)) +
-    geom_point(aes(color = !!color), alpha = point_alpha, size = point_size) +
+## ggplot
+  ggplot(data, aes_string(x = x, y = y, color =color)) +
+    geom_point(alpha = point_alpha, size = point_size) +
+    geom_smooth(method = trend, se = TRUE) +
     labs(
-      x = rlang::as_name(x),
-      y = rlang::as_name(y),
-      color = if (!rlang::quo_is_null(color)) rlang::as_name(color) else NULL
+      x = x,
+      y = y,
+      color = color
     ) +
     theme_minimal(base_size = 12) +
     theme(panel.grid.minor = element_blank())
-
-  if (trend != "none") {
-    method <- if (trend == "lm") "lm" else "loess"
-    p <- p + geom_smooth(method = method, se = TRUE)
-  }
-
-  if (!rlang::quo_is_null(facet)) {
-    p <- p + facet_wrap(vars(!!facet), scales = "free")
-  }
-
-  return(p)
 }
-
 ```
+
 
 #Plot
 ```{r}
-p1 <- smart_scatter(mtcars, x = wt, y = mpg, color = cyl, trend = "lm")
-p1
+p1 <- smart_scatter(mtcars,
+                    x = "wt", 
+                    y = "mpg", 
+                    color = "cyl", 
+                    trend = "lm"
+                    )
+p1 #display the plot
 ggsave(here("Week_10","output","mtcars_mpg_vs_wt_by_cyl.png"),
-       p1, width = 8, height = 5, dpi = 320)
+       plot = p1, width = 8, height = 5, dpi = 320 # save the plot
+)
+```
+
+
+
+```{r}
+p2 <- smart_scatter(iris, 
+                    x = "Petal.Length", y = "Sepal.Length",
+                    color = "Species",
+                    trend = "loess", point_alpha = 0.6,
+                    point_size = 1.6)
+
+ggsave(
+  here("Week_10","output","iris_sepal_vs_petal.png"), 
+  plot = p2, width = 10, height = 6, dpi = 320
+  )
+p2
 ```
 
 
 ```{r}
-#Sepal.Length vs Petal.Length, color + facet by Species, with loess trend
-p2 <- smart_scatter(iris, x = Petal.Length, y = Sepal.Length, 
-                    color = Species, facet = Species, 
-                    trend = "loess", point_alpha = 0.6, point_size = 1.6) 
-p2
- 
-ggsave(here("Week_10","output","iris_sepal_vs_petal_faceted.png"), p2, width = 10, height = 6, dpi = 320)
+p2 ## Do not know, what happend but struggle to visualize in qmd, so I use a seperate chunk to visulaize in qmd.

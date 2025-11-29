@@ -33,7 +33,7 @@ library(gt)
 
 
 ###Load data
-#read the CSV directly from the TidyTuesday repo (so it renders anywhere)
+#read the CSV directly from the TidyTuesday repo (renders anywhere)
 
 ```{r}
 #| label: load

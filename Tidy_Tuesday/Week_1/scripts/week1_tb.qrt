@@ -1,0 +1,124 @@
+---
+title: "Tidy Tuesday — Week 1 (WHO TB)"
+author: "Sk Abidur Rahman"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+format:
+  html:
+    toc: true
+    theme: flatly
+execute:
+  warning: false
+  message: false
+---
+
+## What’s new this week?
+- used **`janitor::clean_names()`** to standardize headers.
+- used **robust tidying**: sum across *all numeric columns* to compute total TB counts by country–year (works even if the file schema changes).
+- used **`forcats::fct_reorder`** to order bars by value.
+- saved the figure to `output/` with `ggsave()` and made a small **gt table**.
+
+```{r}
+#| label: setup
+library(tidyverse)
+library(janitor)
+library(here)
+library(gt)
+
+# Ensure output folder
+dir.create(here("Tidy_Tuesday","Week_1","output"), recursive = TRUE, showWarnings = FALSE)
+
+# Path to data 
+f_tb <- here("Tidy_Tuesday","Week_1","data","who_tb_data.csv")
+stopifnot(file.exists(f_tb))
+```
+
+
+###Load & tidy
+
+```{r}
+tb_raw <- readr::read_csv(f_tb, show_col_types = FALSE) |> clean_names()
+
+# Make a robust total per country–year by summing all numeric columns
+
+tb_tidy <- tb_raw |>
+
+# keep only plausible country & year columns if present; guess them if named slightly differently
+
+rename(
+country = any_of(c("country","country_name")),
+year    = any_of(c("year","yr"))
+) |>
+mutate(across(where(is.character), ~trimws(.))) |>
+filter(!is.na(country)) |>
+group_by(country, year) |>
+summarise(total_cases = sum(across(where(is.numeric)), na.rm = TRUE), .groups = "drop")
+
+glimpse(tb_tidy)
+
+tb_raw <- readr::read_csv(f_tb, show_col_types = FALSE) |> clean_names()
+
+# Make a robust total per country–year by summing all numeric columns
+
+tb_tidy <- tb_raw |>
+
+# keep only plausible country & year columns if present; guess them if named slightly differently
+
+rename(
+country = any_of(c("country","country_name")),
+year    = any_of(c("year","yr"))
+) |>
+mutate(across(where(is.character), ~trimws(.))) |>
+filter(!is.na(country)) |>
+group_by(country, year) |>
+summarise(total_cases = sum(across(where(is.numeric)), na.rm = TRUE), .groups = "drop")
+
+glimpse(tb_tidy)
+tb_raw <- readr::read_csv(f_tb, show_col_types = FALSE) |> clean_names()
+
+# Make a robust total per country–year by summing all numeric columns
+
+tb_tidy <- tb_raw |>
+
+# keep only plausible country & year columns if present; guess them if named slightly differently
+
+rename(
+country = any_of(c("country","country_name")),
+year    = any_of(c("year","yr"))
+) |>
+mutate(across(where(is.character), ~trimws(.))) |>
+filter(!is.na(country)) |>
+group_by(country, year) |>
+summarise(total_cases = sum(across(where(is.numeric)), na.rm = TRUE), .groups = "drop")
+
+glimpse(tb_tidy)
+```
+
+###Head of Data: year & show the top countries
+
+```{r}
+focus_year <- max(tb_tidy$year, na.rm = TRUE) # last year in data
+top_n <- 15
+
+top_cty <- tb_tidy |>
+filter(year == focus_year) |>
+arrange(desc(total_cases)) |>
+slice_head(n = top_n) |>
+mutate(country = forcats::fct_reorder(country, total_cases))
+
+top_cty |> head()
+```
+
+###table (gt)
+
+```{r}
+top_cty |>
+arrange(desc(total_cases)) |>
+mutate(rank = row_number()) |>
+select(rank, country, total_cases) |>
+gt() |>
+fmt_number(columns = total_cases, decimals = 0) |>
+tab_header(
+title = paste("Top", top_n, "Countries —", focus_year),
+subtitle = "Total TB cases (sum over all numeric columns)"
+)
+

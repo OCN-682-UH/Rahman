@@ -1,0 +1,95 @@
+---
+title: "Week12_"
+format: html
+---
+
+library(tidyverse)
+library(here)
+
+print(paste("this year is", 2000))
+
+years<-c(2015:2021)
+
+for(i in years){
+print(paste("this year is", i))
+}
+
+year_data<-tibble(year =  rep(NA, length(years)),  
+                   year_name = rep(NA, length(years)))
+year_data
+
+for (i in 1:length(years)){ # set up the for loop where i is the index
+  year_data$year_name[i]<-paste("The year is", years[i]) # loop over i #<<
+}
+
+year_data
+
+
+###########
+testdata<-read_csv(here("Week_12", "data", "cond_data","011521_CT316_1pcal.csv"))
+
+glimpse(testdata)
+
+CondPath <- here("Week_12", "data", "cond_data")
+
+CondPath
+list.files(CondPath)
+files??????
+files <- dir(path = CondPath,pattern = ".csv")
+
+files
+
+
+ cond_data<-tibble(filename =  rep(NA, length(CondPath)),  
+                   mean_temp = rep(NA, length(CondPath)), 
+                   mean_sal = rep(NA, length(CondPath)),  
+                   ) 
+
+
+cond_data
+
+raw_data<- read_csv(paste0(CondPath,"/",files[i]))
+head(raw_data)
+
+mean_temp<-mean(raw_data$temperature, na.rm=TRUE)
+mean_temp
+
+
+cond_data,- tibble (filename=rep (NA, length(files)),
+)
+
+
+for(oi in 1:length(files)){
+raw_data<- read_csv(paste0(CondPath,"/",files[i]))
+glimpse(raw_data)
+
+cond_data$filenames[i]<-files[i]
+cond_data$mean_temp[i]<-mean(raw$temprature, na.rm=TRUE)
+cond_data$mean_sal[i]<-mean(raw$salinity, na.rm=TRUE)
+
+}
+
+
+
+#################
+1:10 %>%
+map(rnorm, n=15) %>%
+map_dbl(mean)
+
+CondPath<-here("Week_12", "data", "cond_data")
+files <- dir(path = CondPath,pattern = ".csv")
+
+files
+
+files <- dir(path = CondPath,pattern = ".csv", full.names = TRUE)
+files
+
+data<-files %>%
+  set_names()%>% 
+  map_df(read_csv,.id = "filename")
+  group_by(filenames) %>%
+  summaries(mean_map = mean(temperature, na.rm =TRUE),
+  mean_sal = mean(salinity, na.rm =TRUE))
+
+data
+

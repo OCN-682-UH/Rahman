@@ -22,8 +22,8 @@ library(fs)        # Helps list files
 dir.create(here("Week_12", "output"))
 ```
 
-## Data Preparation
 
+## Data Preparation
 ```{r}
 file_path <- here("Week_12", "data") ## Point to the folder where the files
 
@@ -37,7 +37,6 @@ print(files)
 
 
 ##For Loop :repeats a set of instructions
-
 ```{r}
 # empty container (a list) to store the results from each file.
 results_list <- list() # the loop processes one file at a time
@@ -74,7 +73,6 @@ print(final_results_loop)
 
 
 ## Map Functions:
-
 ```{r}
 # Read and Combine all files in one 
 combined_data <- files |> 
@@ -93,8 +91,6 @@ final_results_map <- combined_data |> # summarize it all at once using dplyr fun
 
 # Display the final result from the map method.
 print(final_results_map)
-
-
 ```
 
 

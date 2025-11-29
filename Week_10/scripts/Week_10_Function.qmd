@@ -10,12 +10,10 @@ execute:
   warning: false
   message: false
 ---
-## Overview
+## Note
 Define two general purpose functions and demonstrate them on **built-in datasets** (`mtcars`, `iris`):
-
-- group_summary: **non-plot**: summary stats by one or two groups (n, mean, sd)  
+- group_summary: **non-plot**: summary stats by one or two groups (n, mean, sd) 
 - smart_scatter: **plot**: clean scatter, color/facet
-
 
 
 ```{r}
@@ -26,6 +24,7 @@ library(here)
 # folders
 dir.create(here("Week_10","output"))
 ```
+
 
 ##Function-1: Non-plot: group_summary()
 ```{r}
@@ -46,8 +45,8 @@ group_summary <- function(data, value, group1, group2 = NULL) {
 }
 ```
 
-## Grouped by one factor: iris 
 
+## Grouped by one factor: iris 
 ```{r}
 # Summarize the Sepal.Length by the Species type: both are string
 iris_sum_one_group <- group_summary(
@@ -55,13 +54,12 @@ iris_sum_one_group <- group_summary(
   value = "Sepal.Length", # as a string
   group1 = "Species"      # as a string
 ) 
-
 # Display result
 iris_sum_one_group
 ```
 
-## Grouped by two factor: mtcars
 
+## Grouped by two factor: mtcars
 ```{r}
 #Summarize mpg (miles per gallon) by cyl and am (transmission type)
 mtcars_sum_two_groups <- group_summary(
@@ -121,7 +119,7 @@ ggsave(here("Week_10","output","mtcars_mpg_vs_wt_by_cyl.png"),
 ```
 
 
-
+##save
 ```{r}
 p2 <- smart_scatter(iris, 
                     x = "Petal.Length", y = "Sepal.Length",

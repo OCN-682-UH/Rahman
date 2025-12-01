@@ -1,0 +1,175 @@
+---
+title: "Tidy Tuesday - Week 4: The Exploding Snowman Predicts Summer"
+author: "Sk Abidur Rahman"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+format:
+  html:
+    toc: true
+    theme: flatly
+execute:
+  warning: false
+  message: false
+---
+
+## Overview
+
+The new technique I learned this week is calculating a **Rolling Correlation** using the **`slider`** package.
+
+* **What it does:** Instead of calculating one correlation for the entire 100-year history, I can calculate a correlation for every successive 15-year period (e.g., 1950-1964, then 1951-1965, etc.).
+* **Why it's important:** This technique allows us to find a small window of time where the snowman's prediction might have been temporarily more accurate, which is necessary to answer one of the assignment questions.
+
+---
+
+## 🛠️ Setup & File Structure (2 Points)
+
+This chunk loads the necessary toolkits and prepares the file system.
+
+```{r}
+# packages 
+library(tidyverse) #core package for data manipulation (dplyr) and plotting (ggplot2)
+library(here)      # define file paths consistently
+library(slider)    # for the Rolling Correlation 
+
+# path to the data file
+f_data <- here("Tidy_Tuesday","Week_4", "data", "sechselaeuten.csv")
+
+# Output folder
+dir.create(here("Tidy_Tuesday","Week_4","output"))
+
+
+# Read the dataset
+snowman <- readr::read_csv(f_data, show_col_types = FALSE)
+
+# Check
+head(snowman)
+```
+
+
+#Main Analysis: Duration vs. Summer Temperature
+```{r}
+# Data Clean
+boeoegg_data <- snowman %>%
+  # Select the three columns: year, burn duration, and average temperature
+  select(year, duration, avg_temp = tre200m0) %>%
+  # Remove missing (NA) value
+  filter(!is.na(duration) & !is.na(avg_temp))
+
+# Calculate the Correlation (r) 
+# Correlation measures the linear relationship (-1 is perfect negative, 0 is no relation, 1 is perfect positive)
+correlation_r <- cor(boeoegg_data$duration, boeoegg_data$avg_temp)
+
+# Scatter Plot
+plot_main <- boeoegg_data %>%
+  # X is burn duration, Y is average temperature
+  ggplot(aes(x = duration, y = avg_temp)) +
+  # Add the data points 
+  geom_point(color = "#005a9c", alpha = 0.7, size = 3) +
+  # Add a linear model 'lm' trend line to show the overall pattern
+  geom_smooth(method = "lm", color = "red", se = FALSE, linewidth = 1) +
+  #titles and labels
+  labs(
+    title = "Does the Exploding Snowman Predict Summer Temperature?",
+    subtitle = paste("Correlation (r) =", round(correlation_r, 2), ". The myth seems unsupported by data."),
+    x = "Boeoegg Burn Duration (Minutes)",
+    y = "Average Summer Temperature (°C)"
+  ) +
+  theme_minimal(base_size = 14)
+
+# Show the plot
+plot_main
+
+# Save 
+ggsave(
+  filename = here("output", "snowman_vs_temperature.png"),
+  plot = plot_main,
+  width = 8, height = 5, dpi = 320, create.dir = TRUE
+)
+```
+
+
+#Successive Years with Higher Accuracy
+```{r}
+#rolling-correlation
+# Define the rolling window size (years) 
+window_size <- 15  # 15-year rolling window
+
+# Calculate the rolling correlation between duration and avg_temp 
+rolling_cor <- boeoegg_data %>%
+  arrange(year) %>%        # ensure data is ordered by year
+  mutate(
+    rolling_r = slider::slide2_dbl(
+      .x = duration,       # first series
+      .y = avg_temp,       # second series
+      .f = ~ cor(.x, .y),  # correlation 
+      .before = window_size - 1,  # look back 14 years + current = 15
+      .complete = TRUE              # only compute when window is full
+    )
+  ) %>%
+  filter(!is.na(rolling_r))  # drop leading NAs where window isn't full
+
+# Find the most negative or strongest inverse in 15-year period
+most_accurate_period <- rolling_cor %>%
+  slice_min(rolling_r, n = 1)
+
+most_accurate_period
+```
+
+
+# Forecasting Ability with Other Climate Variables
+```{r}
+# Select burn time and all climate variables columns
+climate_correlation_data <- snowman %>%
+  # Select duration and the mean summer columns for Temp, Sunshine, and Rain
+  select(duration, tre200m0, sre000m0, rre150m0) %>%
+  # Keep only years where all data is available
+  filter(complete.cases(.)) 
+
+#Calculate the R-squared 
+# R-squared is the percentage of variation explained by the linear model
+
+# Model 1: Duration vs. Average Temperature (tre200m0)
+r_sq_temp <- summary(lm(tre200m0 ~ duration, data = climate_correlation_data))$r.squared
+
+# Model 2: Duration vs. Total Sunshine Duration (sre000m0)
+r_sq_sun <- summary(lm(sre000m0 ~ duration, data = climate_correlation_data))$r.squared
+
+# Model 3: Duration vs. Total Precipitation (rre150m0)
+r_sq_rain <- summary(lm(rre150m0 ~ duration, data = climate_correlation_data))$r.squared
+
+# summary table of performance (R-squared) 
+performance_summary <- tibble(
+  Climate_Variable = c("Avg Temp (°C)", "Total Sunshine (Hours)", "Total Precipitation (mm)"),
+  R_Squared = c(r_sq_temp, r_sq_sun, r_sq_rain)
+) %>%
+  # Round R-Squared 
+  mutate(R_Squared = round(R_Squared, 3)) %>%
+  # Arrange by R-Squared
+  arrange(desc(R_Squared)) 
+
+# visualize the R-Squared values
+plot_r_squared <- performance_summary %>%
+  mutate(Climate_Variable = forcats::fct_reorder(Climate_Variable, R_Squared)) %>%
+  ggplot(aes(x = Climate_Variable, y = R_Squared)) +
+  geom_col(fill = "#e7298a") +
+  coord_flip() +
+  geom_text(aes(label = R_Squared), hjust = -0.2, size = 4) +
+  labs(
+    title = "Predictive Power (R-squared) of Burn Duration by Climate Variable",
+    x = NULL,
+    y = "$R^2$ Value (Proportion of Variance Explained)"
+  ) +
+  scale_y_continuous(limits = c(0, max(performance_summary$R_Squared) * 1.2)) +
+  theme_minimal(base_size = 14)
+
+# Show the plot
+plot_r_squared
+
+# Save 
+ggsave(
+  filename = here("output", "r_squared_comparison.png"),
+  plot = plot_r_squared,
+  width = 8, height = 4, dpi = 320, create.dir = TRUE
+)
+```
+
+

@@ -11,62 +11,62 @@ execute:
   message: false
 ---
 
+
 ## Overview
+This **Tidy Tuesday** explores *The Complete Sherlock Holmes* lines.
 
-This **Tidy Tuesday** explores *The Complete Sherlock Holmes* lines.  
-**New thing I learned:** using **tidytext** to tokenize **sentences** and doing a quick **speaker tagging** heuristic to compare sentence lengths & sentiment.
-
-Did:
-1) Split into **sentences**  
-2) Heuristically tag **speaker** (`Holmes`, `Watson`, `Other`)  
-3) Compare **sentence length** and **sentiment**  
-
+**What we are doing:**
+1. Split the text into **sentences** using the `tidytext` package.
+2. Guess the **speaker** (`Holmes`, `Watson`, `Other`) based on simple text patterns.
+3. Compare **sentence length** and **sentiment** across these speakers and over the course of the books.
 
 ```{r}
-#| label: setup
-#install.packages(c("tidyverse","tidytext","here","gt")) 
-library(tidyverse)
-library(tidytext)
-library(here)
-library(gt)
+# packages for data wrangling and text analysis
+library(tidyverse) # for data cleaning and plotting
+library(tidytext)#breaking text into words/sentences (tokenizing)
+library(here) # Helps find files and folders easily across different computers
+library(gt) # summary tables
 ```
 
 
 ###Load data
-#read the CSV directly from the TidyTuesday repo (renders anywhere)
-
 ```{r}
-#| label: load
+# web address for the raw data file from the TidyTuesday repository
 url <- "https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-11-18/holmes.csv"
 
+# Read the data directly from the URL
 holmes <- readr::read_csv(url, show_col_types = FALSE) |>
-  mutate(text = coalesce(text, ""))  # keep blanks as empty strings
+  mutate(text = coalesce(text, ""))# Replace any missing text values (NA)
 
+# check
 glimpse(holmes)
 ```
 
+
 # Convert to sentences while preserving book & line order
-
 ```{r}
-#| label: sentences
-
 sentences <- holmes |>
+  # Create a line number for each book to keep track of order
 mutate(line_num = row_number(), .by = book) |>
-unnest_tokens(sentence, text, token = "sentences", to_lower = FALSE, drop = TRUE) |>
+# tidytext::unnest_tokens to break the main text into individual sentence rows.
+  # token=sentences finding sentence breaks.
+  # to_lower = FALSE keeps capitalization
+  unnest_tokens(sentence, text, token = "sentences", to_lower = FALSE, drop = TRUE) |>
+  # Remove empty strings
 filter(nchar(sentence) > 0) |>
+  # Create a sentence ID within each book to maintain order
 mutate(sent_id = row_number(), .by = book)
 ```
 
-<!-- If the sentence contains “said Holmes” / “Holmes said” ⇒ Holmes -->
-<!-- If it contains “said I” / “I said” or “said Watson” ⇒ Watson -->
-<!-- Otherwise ⇒ Other -->
 
-
+#Heuristic Speaker Tagging
 ```{r}
-#| label: speaker
+# Define the patterns case-insensitive
+# \b ensures we match whole words e.g., 'said' not 'inside'
 holmes_patterns <- regex("\b(Holmes said|said Holmes)\b", ignore_case = TRUE)
 watson_patterns <- regex("\b(I said|said I|Watson said|said Watson)\b", ignore_case = TRUE)
 
+# create a new speaker column
 sentences <- sentences |>
 mutate(
 speaker = case_when(
@@ -74,57 +74,64 @@ str_detect(sentence, holmes_patterns)  ~ "Holmes",
 str_detect(sentence, watson_patterns)  ~ "Watson",
 TRUE                                   ~ "Other"
 ),
+# Convert the speaker column to a Factor and set a specific order
 speaker = factor(speaker, levels = c("Holmes","Watson","Other"))
 )
 ```
 
+
 ##Sentence length 
-
-
 ```{r}
-#| label: length
-
-# token-by-word per sentence, then tally
-
+# count words per sentence
+# break each sentence row into individual word rows
 sent_word_counts <- sentences |>
 unnest_tokens(word, sentence, token = "words", to_lower = FALSE) |>
-count(book, sent_id, speaker, name = "n_words")
+# Group by book, sentence ID, and speaker, then count the words in each sentence
+  count(book, sent_id, speaker, name = "n_words")
 
-# summary by speaker
-
+# summary stat by speaker
 len_by_speaker <- sent_word_counts |>
 group_by(speaker) |>
 summarise(
-mean_len = mean(n_words, na.rm = TRUE),
-med_len  = median(n_words, na.rm = TRUE),
-n_sent   = dplyr::n(),
+mean_len = mean(n_words, na.rm = TRUE),#avg mean sent length
+med_len  = median(n_words, na.rm = TRUE), #median sent leng
+n_sent   = dplyr::n(), #total no, sent count
 .groups = "drop"
 )
 
+# check
 len_by_speaker
 ```
 
-###Plot:sentence length distribution
 
+###Plot:sentence length distribution (Violin/Boxplot)
 ```{r}
-#| label: fig-length
-#| fig-cap: "Sentence length by speaker (word count)."
+#Sentence length by speaker (word count)
 p_len <- sent_word_counts |>
+#Filter out any rows where the speaker couldn't be tagged (NA)
 filter(!is.na(speaker)) |>
+  #plot: X-axis is speaker, Y-axis is word count
 ggplot(aes(x = speaker, y = n_words, fill = speaker)) +
-geom_violin(alpha = 0.5, color = NA, width = 0.9, trim = TRUE) +
-geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0.9) +
+# Add a violin plot to show the overall shape of the distribution
+  geom_violin(alpha = 0.5, color = NA, width = 0.9, trim = TRUE) +
+# Add a boxplot inside to show the median and quartiles 
+  geom_boxplot(width = 0.2, outlier.shape = NA, alpha = 0.9) +
+   # color palette and hode legend
 scale_fill_brewer(palette = "Set2", guide = "none") +
-labs(
+# add title and labels
+  labs(
 title = "Sherlock Holmes: Sentence Length by Speaker",
 subtitle = "Heuristic speaker tagging; word count per sentence",
 x = "Speaker", y = "Words per sentence"
 ) +
-theme_minimal(base_size = 12) +
+# add theme
+  theme_minimal(base_size = 12) +
 theme(panel.grid.minor = element_blank())
 
+# check
 p_len
 
+# save plot
 ggsave(
 filename = here("Tidy_Tuesday","Week_2","output","sentence_length_by_speaker.png"),
 plot = p_len, width = 9, height = 5, dpi = 320
